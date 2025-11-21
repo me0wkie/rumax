@@ -7,7 +7,7 @@ use chrono::Utc;
 impl MaxClient {
     pub async fn send_message(
         &self,
-        chat_id: u64,
+        chat_id: i64,
         text: String,
         args: Option<HashMap<String, serde_json::Value>>,
     ) -> ClientResult<Response> {
@@ -28,10 +28,10 @@ impl MaxClient {
     
     pub async fn fetch_history(
         &self,
-        chat_id: u64,
+        chat_id: i64,
         from_time: Option<u64>,
-        forward: u64,
-        backward: u64,
+        forward: u32,
+        backward: u32,
     ) -> ClientResult<Response> {
         let payload = json!({
             "chatId": chat_id,
@@ -42,4 +42,38 @@ impl MaxClient {
         });
         self.send_and_wait(49, payload, 0).await
     }
+    
+    
+    pub async fn add_reaction(
+        &self,
+        chat_id: i64,
+        message_id: String,
+        reaction: String
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+            "messageId": message_id,
+            "reaction": {
+                "reaction_type": "EMOJI",
+                "id": reaction,
+            }
+        });
+        self.send_and_wait(178, payload, 0).await
+    }
+    
+    pub async fn remove_reaction(
+        &self,
+        chat_id: i64,
+        message_id: String,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+            "messageId": message_id,
+        });
+        self.send_and_wait(179, payload, 0).await
+    }
+    
+    /* TODO Pin, edit, delete */
+    
+    
 }

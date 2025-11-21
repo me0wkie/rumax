@@ -35,6 +35,15 @@ impl MaxClient {
         
         log::info!("check_code response {:?}", resp);
         
+        if let Some(token) = resp.payload.get("token").and_then(|t| t.as_str()) {
+            if resp.payload.get("tokenType").and_then(|t| t.as_str()).unwrap() == "REGISTER" {
+                self.set_temp_token(token.to_string()).await;
+            }
+            else {
+                self.set_token(token.to_string()).await;
+            }
+        }
+        
         Ok(resp)
     }
     
@@ -45,7 +54,6 @@ impl MaxClient {
         &self,
         first_name: String,
         last_name: Option<String>,
-        token: String,
     ) -> ClientResult<Response> {
         let payload = json!({
             "firstName": first_name,
@@ -53,8 +61,6 @@ impl MaxClient {
             "photoId": 2981369,
             "avatarType": "PRESET_AVATAR",
             "tokenType": "REGISTER",
-            "token": token,
-            
         });
         
         let resp = self.send_and_wait(23, payload, 0).await?;

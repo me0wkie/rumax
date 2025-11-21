@@ -147,8 +147,6 @@ pub struct MobileWriter {
 #[async_trait]
 impl TransportWriter for MobileWriter {
     async fn send(&mut self, request: Request) -> ClientResult<()> {
-        // При отправке Request у нас и так JSON-совместимая структура, 
-        // так что обычная сериализация сработает.
         let payload_bytes = rmp_serde::to_vec_named(&request.payload)
             .map_err(|e| Error::SendFailed(format!("MsgPack encode error: {}", e)))?;
 

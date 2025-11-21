@@ -18,7 +18,7 @@ struct NavigationEventParams {
     screen_to: u32,
     screen_from: u32,
     source_id: u32,
-    session_id: String,
+    session_id: i64,
 }
 
 #[derive(Serialize, Debug)]
@@ -52,7 +52,7 @@ impl MaxClient {
                 if let Some(error) = data.payload.get("error") {
                     error!("API телеметрии вернуло ошибку: {}", error);
                 } else {
-                    debug!("Событие телеметрии успешно отправлено");
+                    debug!("Ответ на телеметрию: {:?}", data);
                 }
             }
             Err(e) => {
@@ -74,7 +74,7 @@ impl MaxClient {
             screen_to: navigation::get_screen_id("chats_list_tab"),
             screen_from: 1, 
             source_id: 1,   
-            session_id: state.session_id.clone(),
+            session_id: state.session_id,
         };
 
         let payload = NavigationEventPayload {

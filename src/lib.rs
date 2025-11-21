@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-
+use chrono::Utc;
 use http::header::HeaderValue;
 use serde_json::json;
 use tokio::{
@@ -11,7 +11,6 @@ use tokio::{
     time::timeout,
 };
 use yawc::{CompressionLevel, HttpRequestBuilder, Options, WebSocket};
-use uuid::Uuid;
 use rustls::crypto::ring;
 
 pub mod api;
@@ -41,10 +40,11 @@ struct ClientState {
     token: Option<String>,
     pending: Arc<Mutex<HashMap<u64, oneshot::Sender<ClientResult<Response>>>>>,
     shutdown_tx: Option<broadcast::Sender<()>>,
-    
     user_id: Option<u64>,
     action_id: u64,
-    session_id: String,
+    session_id: i64,
+    device_id: Option<String>,
+    mt_instance: Option<String>,
     current_screen: String,
 }
 
@@ -56,11 +56,13 @@ pub enum ClientMode {
 #[derive(Clone)]
 pub struct MaxClient {
     state: Arc<TokioMutex<ClientState>>,
+    event_tx: broadcast::Sender<Response>,
 }
 
 impl MaxClient {
     pub fn new() -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
+        let (event_tx, _) = broadcast::channel(20);
         MaxClient {
             state: Arc::new(TokioMutex::new(ClientState {
                 writer: None,
@@ -69,13 +71,19 @@ impl MaxClient {
                 token: None,
                 pending: Arc::new(Mutex::new(HashMap::new())),
                 shutdown_tx: Some(shutdown_tx),
-                
                 user_id: None,
                 action_id: 0,
-                session_id: Uuid::new_v4().to_string().replace("-", ""),
+                session_id: Utc::now().timestamp_millis(),
+                device_id: None,
+                mt_instance: None, // TODO IDK что это и зачем
                 current_screen: "chats_list_tab".to_string(),
             })),
+            event_tx,
         }
+    }
+    
+    pub fn subscribe(&self) -> broadcast::Receiver<Response> {
+        self.event_tx.subscribe()
     }
     
     pub async fn is_connected(&self) -> bool {
@@ -90,7 +98,7 @@ impl MaxClient {
         self.state.lock().await.token.clone()
     }
     
-    pub async fn connect(&self, device_id: String, is_mobile: bool) -> ClientResult<Response> {
+    pub async fn connect(&self, device_id: String, mt_instance: String, is_mobile: bool) -> ClientResult<Response> {
         let _ = ring::default_provider().install_default();
         let (writer, reader): (Box<dyn TransportWriter>, Box<dyn TransportReader>) = if is_mobile {
             info!("Подключение Mobile TCP/TLS...");
@@ -119,25 +127,30 @@ impl MaxClient {
 
         let state_clone = Arc::clone(&self.state);
         let mut state_lock = state_clone.lock().await;
-
+        
         let pending_clone = Arc::clone(&state_lock.pending);
         let (shutdown_tx, shutdown_rx_read) = broadcast::channel(1);
         let shutdown_rx_ping = shutdown_tx.subscribe();
+        let event_tx = self.event_tx.clone();
+        
+        state_lock.device_id = Some(device_id.clone());
+        state_lock.mt_instance = Some(mt_instance.clone());
+        state_lock.session_id = Utc::now().timestamp_millis();
 
-        tokio::spawn(Self::read_task(reader, pending_clone, shutdown_rx_read));
+        tokio::spawn(Self::read_task(reader, pending_clone, event_tx, shutdown_rx_read, Arc::clone(&self.state)));
         debug!("Задача чтения (read_task) запущена.");
-
+        
         let ping_client = self.clone();
         tokio::spawn(Self::ping_task(ping_client, shutdown_rx_ping));
         debug!("Задача пинга (ping_task) запущена.");
-
+        
         state_lock.writer = Some(writer);
         state_lock.shutdown_tx = Some(shutdown_tx);
-
+        
         drop(state_lock);
-
+        
         debug!("Отправка Handshake с deviceId: {}", device_id);
-
+        
         let handshake_payload = if is_mobile {
             let user_agent = json!({
                 "deviceType": "ANDROID",
@@ -152,8 +165,8 @@ impl MaxClient {
                 "deviceLocale": "ru",
             });
             json!({
-                "clientSessionId": 16,
-                "mt_instanceid": "a3a9fae1-c67a-47cd-86f4-cfde7c622825", //Uuid::new_v4().to_string()
+                "clientSessionId": 1,
+                "mt_instanceid": mt_instance, //Uuid::new_v4().to_string()
                 "userAgent": user_agent,
                 "deviceId": device_id,
             })
@@ -173,14 +186,56 @@ impl MaxClient {
 
         self.send_and_wait(6, handshake_payload, 0).await
     }
-
-    async fn send_frame(&self, request: Request) -> ClientResult<()> {
+    
+    pub async fn disconnect(&self) {
         let mut state = self.state.lock().await;
-        if let Some(writer) = &mut state.writer {
-            writer.send(request).await
-        } else {
-            Err(Error::NotConnected)
+        
+        if let Some(shutdown_tx) = state.shutdown_tx.take() {
+            let _ = shutdown_tx.send(()); 
         }
+        
+        state.writer = None;
+        
+        state.pending.lock().unwrap().clear();
+        
+        state.token = None;
+        state.user_id = None;
+        state.seq = 0;
+        
+        state.session_id = Utc::now().timestamp_millis();
+        
+        info!("Клиент отключен, состояние сброшено.");
+    }
+    
+    fn send_frame(&self, request: Request) -> std::pin::Pin<Box<dyn std::future::Future<Output = ClientResult<()>> + Send>> {
+        let this = self.clone();
+        
+        Box::pin(async move {
+            let (should_reconnect, device_id, mt_instance) = {
+                let state = this.state.lock().await;
+                if state.writer.is_none() {
+                    (true, state.device_id.clone(), state.mt_instance.clone())
+                } else {
+                    (false, None, None)
+                }
+            };
+
+            if should_reconnect {
+                if let (Some(id), Some(mt)) = (device_id, mt_instance) {
+                    debug!("Реконнект внутри send_frame...");
+                    this.connect(id, mt, true).await?; 
+                } else {
+                    return Err(Error::ConnectionFailed("Device ID not set".to_string()));
+                }
+            }
+
+            let mut state = this.state.lock().await;
+            if let Some(writer) = &mut state.writer {
+                writer.send(request).await
+            } else {
+                Err(Error::NotConnected)
+            }
+        })
     }
 
     pub async fn send_and_wait(
@@ -195,7 +250,7 @@ impl MaxClient {
             let mut state = self.state.lock().await;
             state.seq += 1;
             let current_seq = state.seq;
-
+            
             state.pending.lock().unwrap().insert(current_seq, tx);
             
             Request {
@@ -234,7 +289,9 @@ impl MaxClient {
     async fn read_task(
         mut reader: Box<dyn TransportReader>,
         pending: Arc<Mutex<HashMap<u64, oneshot::Sender<ClientResult<Response>>>>>,
+        event_sender: broadcast::Sender<Response>,
         mut shutdown_rx: broadcast::Receiver<()>,
+        state: Arc<TokioMutex<ClientState>>,
     ) {
         loop {
             tokio::select! {
@@ -242,17 +299,35 @@ impl MaxClient {
                     match msg_result {
                         Ok(Some(resp)) => {
                             let seq = resp.seq;
-                            if let Some(sender) = pending.lock().unwrap().remove(&seq) {
+                            let waiting_sender = {
+                                let mut guard = pending.lock().unwrap();
+                                guard.remove(&seq)
+                            };
+                            
+                            if let Some(sender) = waiting_sender {
                                 let _ = sender.send(Ok(resp));
+                            } else {
+                                let _ = event_sender.send(resp); 
                             }
                         },
                         Ok(None) => {
                             info!("Соединение закрыто (EOF)");
+                            let mut s = state.lock().await;
+                            s.writer = None;
+                            let mut pending_guard = pending.lock().unwrap();
+                            for (_, sender) in pending_guard.drain() {
+                                let _ = sender.send(Err(Error::ConnectionClosed("Соединение закрыто".to_string())));
+                            }
                             break;
                         },
                         Err(e) => {
                             error!("Ошибка чтения транспорта:\n{}", e);
-                            // добавить реконнект или брейк
+                            let mut s = state.lock().await;
+                            s.writer = None;
+                            let mut pending_guard = pending.lock().unwrap();
+                            for (_, sender) in pending_guard.drain() {
+                                let _ = sender.send(Err(Error::ConnectionClosed(e.to_string()))); 
+                            }
                             break;
                         }
                     }

@@ -5,6 +5,7 @@ use tokio::sync::oneshot;
 pub enum Error {
     NotConnected,
     ConnectionFailed(String),
+    ConnectionClosed(String),
     SendFailed(String),
     ParseError(serde_json::Error),
     RequestTimeout(Duration),
@@ -39,6 +40,7 @@ impl fmt::Display for Error {
         match self {
             Error::NotConnected => write!(f, "Клиент не подключен"),
             Error::ConnectionFailed(e) => write!(f, "Ошибка подключения: {}", e),
+            Error::ConnectionClosed(e) => write!(f, "Соединение оборвано: {}", e),
             Error::SendFailed(e) => write!(f, "Ошибка отправки: {}", e),
             Error::ParseError(e) => write!(f, "Ошибка парсинга JSON: {}", e),
             Error::RequestTimeout(d) => write!(f, "Таймаут запроса: {:?}", d),

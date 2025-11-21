@@ -1,4 +1,3 @@
-// Объявляем подмодули (файлы web.rs и mobile.rs должны лежать рядом)
 pub mod mobile;
 pub mod web;
 
@@ -13,12 +12,11 @@ pub trait TransportFactory: Send {
 }
 
 #[async_trait]
-pub trait TransportWriter: Send + Sync {
+pub trait TransportWriter: Send {
     async fn send(&mut self, request: Request) -> ClientResult<()>;
 }
 
-/// Интерфейс для чтения ответов.
 #[async_trait]
-pub trait TransportReader: Send + Sync {
+pub trait TransportReader: Send {
     async fn next_message(&mut self) -> ClientResult<Option<Response>>;
 }
