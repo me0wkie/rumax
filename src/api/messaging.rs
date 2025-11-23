@@ -47,14 +47,14 @@ impl MaxClient {
     pub async fn add_reaction(
         &self,
         chat_id: i64,
-        message_id: String,
+        message_id: u64,
         reaction: String
     ) -> ClientResult<Response> {
         let payload = json!({
             "chatId": chat_id,
             "messageId": message_id,
             "reaction": {
-                "reaction_type": "EMOJI",
+                "reactionType": "EMOJI",
                 "id": reaction,
             }
         });
@@ -64,7 +64,7 @@ impl MaxClient {
     pub async fn remove_reaction(
         &self,
         chat_id: i64,
-        message_id: String,
+        message_id: u64,
     ) -> ClientResult<Response> {
         let payload = json!({
             "chatId": chat_id,

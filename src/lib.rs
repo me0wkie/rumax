@@ -261,7 +261,8 @@ impl MaxClient {
                 payload,
             }
         };
-
+        
+        debug!("Отправка: {:?}", request);
         self.send_frame(request.clone()).await?;
 
         match timeout(Constants::DEFAULT_TIMEOUT, rx).await {

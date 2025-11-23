@@ -67,12 +67,23 @@ fn msgpack_to_json(val: MsgPackValue) -> JsonValue {
         MsgPackValue::Nil => JsonValue::Null,
         MsgPackValue::Boolean(b) => JsonValue::Bool(b),
         MsgPackValue::Integer(i) => {
-            if let Some(v) = i.as_i64() {
-                JsonValue::Number(v.into())
-            } else if let Some(v) = i.as_u64() {
-                JsonValue::Number(v.into())
-            } else {
-                JsonValue::Null 
+            const MAX_SAFE_INT: u64 = 9_007_199_254_740_991;
+            if let Some(v) = i.as_u64() {
+                if v > MAX_SAFE_INT {
+                    JsonValue::String(v.to_string())
+                } else {
+                    JsonValue::Number(v.into())
+                }
+            }
+            else if let Some(v) = i.as_i64() {
+                 if v < -(MAX_SAFE_INT as i64) {
+                     JsonValue::String(v.to_string())
+                 } else {
+                     JsonValue::Number(v.into())
+                 }
+            } 
+            else {
+                JsonValue::Null
             }
         }
         MsgPackValue::F32(f) => JsonValue::Number(serde_json::Number::from_f64(f as f64).unwrap_or_else(|| 0.into())),
@@ -81,13 +92,13 @@ fn msgpack_to_json(val: MsgPackValue) -> JsonValue {
         MsgPackValue::Binary(b) => JsonValue::String(String::from_utf8_lossy(&b).to_string()),
         MsgPackValue::Array(vec) => {
             JsonValue::Array(vec.into_iter().map(msgpack_to_json).collect())
-        }
+        },
         MsgPackValue::Map(vec) => {
             let mut map = Map::new();
             for (k, v) in vec {
                 let key_str = match k {
                     MsgPackValue::String(s) => s.into_str().unwrap_or_default(),
-                    MsgPackValue::Integer(i) => i.to_string(), // FIX: Int Key -> String Key
+                    MsgPackValue::Integer(i) => i.to_string(),
                     MsgPackValue::Boolean(b) => b.to_string(),
                     _ => "unknown".to_string(),
                 };
