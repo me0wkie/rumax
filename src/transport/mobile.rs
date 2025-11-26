@@ -120,15 +120,7 @@ impl MobileTransport {
         let tcp = TcpStream::connect(&addr).await
             .map_err(|e| Error::ConnectionFailed(format!("TCP Error: {}", e)))?;
         
-        let mut root_store = rustls::RootCertStore::empty();
-        let certs_result = rustls_native_certs::load_native_certs();
-        for cert in certs_result.certs {
-            root_store.add(cert).ok();
-        }
-        
-        let config = ClientConfig::builder()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
+        let config = create_tls_config();
             
         let connector = TlsConnector::from(Arc::new(config));
         let domain = ServerName::try_from(host.to_string())
@@ -139,6 +131,22 @@ impl MobileTransport {
 
         Ok(Self { stream: MobileStream::Tls(tls_stream) })
     }
+}
+
+fn create_tls_config() -> ClientConfig {
+    let mut root_store = rustls::RootCertStore::empty();
+    
+    root_store.extend(
+        webpki_roots::TLS_SERVER_ROOTS
+            .iter()
+            .cloned()
+    );
+    
+    let config = ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
+
+    config
 }
 
 impl TransportFactory for MobileTransport {

@@ -5,7 +5,7 @@ use std::{
 };
 use chrono::Utc;
 use http::header::HeaderValue;
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio::{
     sync::{broadcast, oneshot, Mutex as TokioMutex},
     time::timeout,
@@ -56,7 +56,7 @@ pub enum ClientMode {
 #[derive(Clone)]
 pub struct MaxClient {
     state: Arc<TokioMutex<ClientState>>,
-    event_tx: broadcast::Sender<Response>,
+    event_tx: broadcast::Sender<Value>,
 }
 
 impl MaxClient {
@@ -82,7 +82,7 @@ impl MaxClient {
         }
     }
     
-    pub fn subscribe(&self) -> broadcast::Receiver<Response> {
+    pub fn subscribe(&self) -> broadcast::Receiver<Value> {
         self.event_tx.subscribe()
     }
     
@@ -237,7 +237,7 @@ impl MaxClient {
             }
         })
     }
-
+    
     pub async fn send_and_wait(
         &self,
         opcode: u16,
@@ -263,8 +263,13 @@ impl MaxClient {
         };
         
         debug!("Отправка: {:?}", request);
+        let _ = self.event_tx.send(json!({
+            "type": "log",
+            "request": request
+        })); 
+        
         self.send_frame(request.clone()).await?;
-
+        
         match timeout(Constants::DEFAULT_TIMEOUT, rx).await {
             Ok(Ok(Ok(response))) => {
                 trace!("Получен ответ для seq: {}", response.seq);
@@ -290,7 +295,7 @@ impl MaxClient {
     async fn read_task(
         mut reader: Box<dyn TransportReader>,
         pending: Arc<Mutex<HashMap<u64, oneshot::Sender<ClientResult<Response>>>>>,
-        event_sender: broadcast::Sender<Response>,
+        event_sender: broadcast::Sender<Value>,
         mut shutdown_rx: broadcast::Receiver<()>,
         state: Arc<TokioMutex<ClientState>>,
     ) {
@@ -306,13 +311,25 @@ impl MaxClient {
                             };
                             
                             if let Some(sender) = waiting_sender {
+                                let log = json!({
+                                    "type": "log",
+                                    "response": &resp
+                                });
+                                let _ = event_sender.send(log);
                                 let _ = sender.send(Ok(resp));
                             } else {
-                                let _ = event_sender.send(resp); 
+                                let _ = event_sender.send(json!({
+                                    "type": "rx",
+                                    "response": resp
+                                }));
                             }
                         },
                         Ok(None) => {
                             info!("Соединение закрыто (EOF)");
+                            let _ = event_sender.send(json!({
+                                "type": "log",
+                                "response": "closed"
+                            })); 
                             let mut s = state.lock().await;
                             s.writer = None;
                             let mut pending_guard = pending.lock().unwrap();
