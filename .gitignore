@@ -1,3 +1,4 @@
 /target
 .device.id
 .session.token
+**/*.kate-swp
