@@ -81,7 +81,7 @@ impl MaxClient {
             event_tx,
         }
     }
-    
+
     pub fn subscribe(&self) -> broadcast::Receiver<Value> {
         self.event_tx.subscribe()
     }
@@ -383,6 +383,14 @@ impl MaxClient {
             }
         }
         info!("Ping task finished");
+    }
+
+    pub async fn call(
+        &self,
+        action_id: u16,
+        payload: serde_json::Value,
+    ) -> ClientResult<Response> {
+        self.send_and_wait(action_id, payload, 0).await
     }
     
     pub async fn set_token(&self, token: String) {
