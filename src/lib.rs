@@ -46,6 +46,7 @@ struct ClientState {
     device_id: Option<String>,
     mt_instance: Option<String>,
     current_screen: String,
+    is_closed: bool,
 }
 
 pub enum ClientMode {
@@ -77,6 +78,7 @@ impl MaxClient {
                 device_id: None,
                 mt_instance: None, // TODO IDK что это и зачем
                 current_screen: "chats_list_tab".to_string(),
+                is_closed: true,
             })),
             event_tx,
         }
@@ -127,6 +129,7 @@ impl MaxClient {
 
         let state_clone = Arc::clone(&self.state);
         let mut state_lock = state_clone.lock().await;
+        state_lock.is_closed = false;
         
         let pending_clone = Arc::clone(&state_lock.pending);
         let (shutdown_tx, shutdown_rx_read) = broadcast::channel(1);
@@ -189,6 +192,7 @@ impl MaxClient {
     
     pub async fn disconnect(&self) {
         let mut state = self.state.lock().await;
+        state.is_closed = true;
         
         if let Some(shutdown_tx) = state.shutdown_tx.take() {
             let _ = shutdown_tx.send(()); 
@@ -213,6 +217,11 @@ impl MaxClient {
         Box::pin(async move {
             let (should_reconnect, device_id, mt_instance) = {
                 let state = this.state.lock().await;
+
+                if state.is_closed {
+                    return Err(Error::NotConnected)
+                }
+
                 if state.writer.is_none() {
                     (true, state.device_id.clone(), state.mt_instance.clone())
                 } else {

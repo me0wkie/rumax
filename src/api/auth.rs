@@ -10,7 +10,7 @@ impl MaxClient {
         let payload = json!({ "phone": phone, "type": "START_AUTH", "language": "ru" });
         let resp = self.send_and_wait(17, payload, 0).await?;
         
-        log::info!("start_auth response {:?}", resp);
+        log::debug!("start_auth response {:?}", resp);
         
         if let Some(token) = resp.payload.get("token").and_then(|t| t.as_str()) {
             log::info!("temp token from response {:?}", token);
@@ -33,7 +33,7 @@ impl MaxClient {
         
         let resp = self.send_and_wait(18, payload, 0).await?;
         
-        log::info!("check_code response {:?}", resp);
+        log::debug!("check_code response {:?}", resp);
         
         if let Some(token) = resp.payload.get("token").and_then(|t| t.as_str()) {
             if resp.payload.get("tokenType").and_then(|t| t.as_str()).unwrap() == "REGISTER" {
@@ -88,10 +88,31 @@ impl MaxClient {
             "interactive": true, "token": token,
             "chatsSync": 0, "contactsSync": 0, "presenceSync": 0, "draftsSync": 0, "chatsCount": 40,
         });
-        
-        // Отпускаем лок перед .await
+
         drop(state);
         
         self.send_and_wait(19, payload, 0).await
+    }
+
+    /*
+     * Удаление сессии
+     */
+    pub async fn logout(&self) -> ClientResult<Response> {
+        self.disconnect().await;
+        self.send_and_wait(20, json!({}), 0).await
+    }
+
+    /*
+     * Список сессий
+     */
+    pub async fn get_sessions(&self) -> ClientResult<Response> {
+        self.send_and_wait(96, json!({}), 0).await
+    }
+
+    /*
+     * Закрыть все сессии, кроме текущей
+     */
+    pub async fn close_all_sessions(&self) -> ClientResult<Response> {
+        self.send_and_wait(97, json!({}), 0).await
     }
 }
