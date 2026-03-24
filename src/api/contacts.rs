@@ -25,11 +25,13 @@ impl MaxClient {
     
     pub async fn add_contact(
         &self,
-        user_id: u64
+        user_id: u64,
+        first_name: String
     ) -> ClientResult<Response> {
         let payload = json!({
             "contactId": user_id,
-            "action": "ADD",
+            "firstName": first_name,
+            "action": "ADD"
         });
         self.send_and_wait(34, payload, 0).await
     }
