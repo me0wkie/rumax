@@ -17,7 +17,7 @@ impl MaxClient {
             "message": {
                 "text": text,
                 "cid": Utc::now().timestamp_millis(),
-                "elements": json!([]),
+                "elements": args_map.get("elements").cloned().unwrap_or(json!([])),
                 "attaches": args_map.get("attaches").cloned().unwrap_or(json!([])),
                 "link": args_map.get("replyTo").cloned().map(|id| json!({"type": "REPLY", "messageId": id.to_string()})),
             },
