@@ -51,4 +51,5 @@ tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 rmpv = "1"
 webpki-roots = "1.0.4" 
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots", "multipart"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots", "multipart", "stream"] }
+tokio-util = { version = "0.7.18", features = ["io"] }
