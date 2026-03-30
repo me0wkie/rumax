@@ -100,7 +100,7 @@ impl MaxClient {
             None => return json!({ "error": "Token not found in response" }),
         };
 
-        json!({ "photo_token": token.to_string() })
+        json!({ "photoToken": token.to_string() })
     }
 
     pub async fn upload_video(
