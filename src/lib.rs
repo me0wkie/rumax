@@ -47,6 +47,8 @@ struct ClientState {
     mt_instance: Option<String>,
     current_screen: String,
     is_closed: bool,
+    mobile_port: u16,
+    mobile_host: String,
 }
 
 pub enum ClientMode {
@@ -79,6 +81,8 @@ impl MaxClient {
                 mt_instance: None, // TODO IDK что это и зачем
                 current_screen: "chats_list_tab".to_string(),
                 is_closed: true,
+                mobile_host: Constants::MOBILE_HOST.to_string(),
+                mobile_port: Constants::MOBILE_PORT,
             })),
             event_tx,
         }
@@ -99,12 +103,22 @@ impl MaxClient {
     pub async fn get_token(&self) -> Option<String> {
         self.state.lock().await.token.clone()
     }
+
+    pub async fn set_host(&self, address: String, port: u16) {
+        let mut state = self.state.lock().await;
+        state.mobile_host = address;
+        state.mobile_port = port;
+    }
     
     pub async fn connect(&self, device_id: String, mt_instance: String, is_mobile: bool) -> ClientResult<Response> {
         let _ = ring::default_provider().install_default();
+
+        let state_clone = Arc::clone(&self.state);
+        let mut state_lock = state_clone.lock().await;
+
         let (writer, reader): (Box<dyn TransportWriter>, Box<dyn TransportReader>) = if is_mobile {
             info!("Подключение Mobile TCP/TLS...");
-            let transport = MobileTransport::connect_tls(Constants::MOBILE_HOST, 443).await?;
+            let transport = MobileTransport::connect_tls(&state_lock.mobile_host, state_lock.mobile_port, None, None).await?;
             let (w, r) = transport.split();
             (Box::new(w), Box::new(r))
         } else {
@@ -127,8 +141,6 @@ impl MaxClient {
 
         info!("Разделение потоков и запуск задач...");
 
-        let state_clone = Arc::clone(&self.state);
-        let mut state_lock = state_clone.lock().await;
         state_lock.is_closed = false;
         
         let pending_clone = Arc::clone(&state_lock.pending);
@@ -205,8 +217,6 @@ impl MaxClient {
         state.token = None;
         state.user_id = None;
         state.seq = 0;
-        
-        state.session_id = Utc::now().timestamp_millis();
         
         info!("Клиент отключен, состояние сброшено.");
     }

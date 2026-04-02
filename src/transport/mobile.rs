@@ -9,12 +9,14 @@ use tokio::net::TcpStream;
 use tokio_rustls::{client::TlsStream, TlsConnector};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::sync::Arc;
-use rustls::pki_types::ServerName;
-use rustls::ClientConfig;
+use std::{sync::Arc};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName};
+use rustls::pki_types::pem::PemObject;
+use rustls::{ClientConfig, RootCertStore};
+
 
 use serde_json::{Map, Value as JsonValue};
-use rmpv::{Value as MsgPackValue}; 
+use rmpv::{Value as MsgPackValue};
 use rmpv::decode::read_value;
 
 pub enum MobileStream {
@@ -115,22 +117,50 @@ pub struct MobileTransport {
 }
 
 impl MobileTransport {
-    pub async fn connect_tls(host: &str, port: u16) -> ClientResult<Self> {
+    pub async fn connect_tls(host: &str, port: u16, cert_path: Option<&str>, key_path: Option<&str>) -> ClientResult<Self> {
         let addr = format!("{}:{}", host, port);
         let tcp = TcpStream::connect(&addr).await
             .map_err(|e| Error::ConnectionFailed(format!("TCP Error: {}", e)))?;
-        
-        let config = create_tls_config();
-            
-        let connector = TlsConnector::from(Arc::new(config));
+
+        let config = if let (Some(path_1), Some(path_2)) = (cert_path, key_path) {
+            trust_certificate(path_1, path_2)
+            .map_err(|e| Error::ConnectionFailed(format!("Cert load error: {}", e)))?
+        } else {
+            Arc::new(create_tls_config())
+        };
+
+        let connector = TlsConnector::from(config);
         let domain = ServerName::try_from(host.to_string())
             .map_err(|_| Error::ConnectionFailed("Invalid DNS name".into()))?;
-        
+
         let tls_stream = connector.connect(domain, tcp).await
             .map_err(|e| Error::ConnectionFailed(format!("TLS Error: {}", e)))?;
 
         Ok(Self { stream: MobileStream::Tls(tls_stream) })
     }
+}
+
+fn trust_certificate(
+    certs_file: &str,
+    key_file: &str
+) -> Result<Arc<ClientConfig>, String> {
+    let certs: Vec<CertificateDer> =
+    CertificateDer::pem_file_iter(certs_file)
+        .unwrap()
+        .map(|c| c.unwrap())
+        .collect();
+
+    let key = PrivateKeyDer::from_pem_file(key_file).unwrap();
+
+    let mut root_store = RootCertStore::empty();
+    root_store.add_parsable_certificates(certs.clone());
+
+    let config = ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_client_auth_cert(certs, key)
+        .unwrap();
+
+    Ok(Arc::new(config))
 }
 
 fn create_tls_config() -> ClientConfig {

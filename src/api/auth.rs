@@ -35,12 +35,21 @@ impl MaxClient {
         
         log::debug!("check_code response {:?}", resp);
         
-        if let Some(token) = resp.payload.get("token").and_then(|t| t.as_str()) {
-            if resp.payload.get("tokenType").and_then(|t| t.as_str()).unwrap() == "REGISTER" {
-                self.set_temp_token(token.to_string()).await;
-            }
-            else {
-                self.set_token(token.to_string()).await;
+        if let Some(token_attrs) = resp.payload.get("tokenAttrs").and_then(|t| t.as_object()) {
+            for (token_type, value) in token_attrs {
+                if let Some(token) = value.get("token").and_then(|t| t.as_str()) {
+                    match token_type.as_str() {
+                        "REGISTER" => {
+                            self.set_temp_token(token.to_string()).await;
+                        }
+                        "LOGIN" => {
+                            self.set_token(token.to_string()).await;
+                        }
+                        _ => {
+                            eprintln!("Unknown token type: {}", token_type);
+                        }
+                    }
+                }
             }
         }
         

@@ -60,9 +60,9 @@ async fn main() {
 
     let client = Arc::new(MaxClient::new());
 
-    let (device_id, mt) = get_device_id();
+    let (device_id, mt) = get_device();
 
-    info!("Подключение к WebSocket...");
+    info!("Подключение к MobileSocket...");
     match client.connect(device_id, mt, true).await {
         Ok(resp) => {
             info!("Handshake успешен!");
@@ -91,14 +91,12 @@ async fn main() {
     let code = read_line("Введите код из СМС: ");
     info!("Проверяем код...");
 
-    let token: String;
-
     match client.check_code(code).await {
         Ok(resp) => {
             info!("Код принят, логин успешен!");
             debug!("Ответ check_code: {:?}", resp.payload);
             
-            token = resp.payload.get("tokenAttrs")
+            resp.payload.get("tokenAttrs")
                 .and_then(|t| t.get("LOGIN"))
                 .and_then(|l| l.get("token"))
                 .and_then(|t| t.as_str())
@@ -146,7 +144,7 @@ async fn main() {
     
     let chat_id_str = read_line("Введите Chat ID для тестового сообщения: ");
     
-    let chat_id: u64 = match chat_id_str.parse() {
+    let chat_id: i64 = match chat_id_str.parse() {
         Ok(num) => num,
         Err(_) => {
             error!("Это не похоже на число (u64). Выход.");

@@ -6,7 +6,7 @@ use uuid::Uuid;
 use log::{info, error, debug, warn};
 
 const DEVICE_ID_FILE: &str = ".device.id";
-const TOKEN_FILE: &str = ".session.token"; // <-- Файл для токена
+const TOKEN_FILE: &str = ".session.token";
 
 fn read_line(prompt: &str) -> String {
     print!("{}", prompt);
@@ -107,7 +107,7 @@ async fn main() -> Result<(), rumax::errors::Error> {
     let client = Arc::new(MaxClient::new());
     let (device_id, mt) = get_device();
     
-    info!("Подключение к WebSocket...");
+    info!("Подключение к MobileSocket...");
     match client.connect(device_id, mt, true).await {
         Ok(resp) => {
             info!("Handshake успешен!");
@@ -174,10 +174,10 @@ async fn main() -> Result<(), rumax::errors::Error> {
     
     let chat_id_str = read_line("Введите Chat ID для тестового сообщения: ");
     
-    let chat_id: u64 = match chat_id_str.parse() {
+    let chat_id: i64 = match chat_id_str.parse() {
         Ok(num) => num,
         Err(_) => {
-            error!("Это не похоже на число (u64). Выходим");
+            error!("Это не похоже на число (i64). Выходим");
             return Ok(());
         }
     };

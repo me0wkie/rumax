@@ -2,3 +2,4 @@
 .device.id
 .session.token
 **/*.kate-swp
+**/*.pem
