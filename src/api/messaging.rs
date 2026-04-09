@@ -98,7 +98,7 @@ impl MaxClient {
             "messageId": message_id,
             "fileId": file_id
         });
-        self.send_and_wait(83, payload, 0).await
+        self.send_and_wait(88, payload, 0).await
     }
 
     pub async fn read_message(
