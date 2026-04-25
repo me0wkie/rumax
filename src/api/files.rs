@@ -2,6 +2,7 @@ use crate::{errors::ClientResult, MaxClient};
 use crate::models::Response;
 use serde_json::{json, Value};
 use tokio::{fs::File};
+use tokio::io::AsyncReadExt;
 use tokio_util::io::ReaderStream;
 use reqwest::{Client, Body, multipart};
 use futures_util::StreamExt;
@@ -53,28 +54,43 @@ impl MaxClient {
     pub async fn upload_photo(
         &self,
         upload_url: String,
-        path: String
+        mut file: File,
+        file_name: String,
+        mime: Option<String>,
     ) -> Value {
-        let ext = match path.split('.').last() {
-            Some(e) => e.to_lowercase(),
-            None => return json!({ "error": "Failed to get file extension" }),
+        let ext = file_name
+        .split('.')
+        .last()
+        .map(|e| e.to_lowercase());
+
+        let mime = if let Some(m) = mime {
+            m
+        } else if let Some(ext) = ext {
+            match ext.as_str() {
+                "jpg" | "jpeg" => "image/jpeg".to_string(),
+                "png" => "image/png".to_string(),
+                _ => {
+                    return json!({ "error": "Unsupported file extension" });
+                }
+            }
+        } else {
+            return json!({ "error": "Failed to determine MIME type" });
         };
 
-        let mime = match ext.as_str() {
-            "jpg" | "jpeg" => "image/jpeg",
-            "png" => "image/png",
-            _ => return json!({ "error": "Photo validation failed" }),
-        };
+        let mut file_bytes = Vec::new();
+        if let Err(_) = file.read_to_end(&mut file_bytes).await {
+            return json!({ "error": "Failed to read photo" });
+        }
 
-        let file_bytes = match fs::read(&path) {
-            Ok(b) => b,
-            Err(_) => return json!({ "error": "Failed to read photo" }),
-        };
+        let ext = mime.split('/').last().unwrap_or("jpg");
 
-        let form = multipart::Form::new()
-        .part("file", multipart::Part::bytes(file_bytes)
-        .file_name(format!("image.{}", ext))
-        .mime_str(mime).unwrap());
+        let form = multipart::Form::new().part(
+            "file",
+            multipart::Part::bytes(file_bytes)
+            .file_name(format!("image.{}", ext))
+            .mime_str(&mime)
+            .unwrap(),
+        );
 
         let client = reqwest::Client::new();
         let response = match client.post(upload_url).multipart(form).send().await {
@@ -108,22 +124,18 @@ impl MaxClient {
         upload_url: String,
         video_id: u64,
         token: String,
-        path: String,
+        mut file: File,
+        file_name: String,
     ) -> Value {
-        // читаем весь файл в память
-        let file_bytes = match fs::read(&path) {
-            Ok(b) => b,
-            Err(e) => {
-                return json!({ "error": format!("Failed to read video: {}", e) });
-            }
-        };
+        let mut file_bytes = Vec::new();
+        if let Err(e) = file.read_to_end(&mut file_bytes).await {
+            return json!({ "error": format!("Failed to read video: {}", e) });
+        }
 
         let file_size = file_bytes.len();
         if file_size == 0 {
             return json!({ "error": "Empty file" });
         }
-
-        let file_name = path.split('/').last().unwrap_or("video.mp4");
 
         let client = match Client::builder()
         .timeout(Duration::from_secs(600))
@@ -160,30 +172,19 @@ impl MaxClient {
         &self,
         upload_url: String,
         file_id: u64,
-        path: String,
+        mut file: File,
+        file_name: String,
     ) -> Value {
-        let file = match File::open(&path).await {
-            Ok(f) => f,
-            Err(e) => return json!({ "error": format!("Failed to open file: {}", e) }),
-        };
-
-        let metadata = match file.metadata().await {
-            Ok(m) => m,
+        let file_size = match file.metadata().await {
+            Ok(m) => m.len(),
             Err(e) => return json!({ "error": format!("Failed to get metadata: {}", e) }),
         };
 
-        let file_size = metadata.len();
         if file_size == 0 {
             return json!({ "error": "Empty file" });
         }
 
-        let file_name = path.split('/').last().unwrap_or("file");
-
-        let stream = ReaderStream::new(file)
-        .map(|chunk_result| {
-            chunk_result.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-        });
-
+        let stream = ReaderStream::new(file);
         let body = Body::wrap_stream(stream);
 
         let client = match Client::builder().build() {
