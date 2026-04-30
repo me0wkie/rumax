@@ -1,6 +1,6 @@
 use crate::{errors::ClientResult, MaxClient};
 use crate::models::Response;
-use serde_json::json;
+use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use chrono::Utc;
 
@@ -12,17 +12,39 @@ impl MaxClient {
         args: Option<HashMap<String, serde_json::Value>>,
     ) -> ClientResult<Response> {
         let args_map = args.unwrap_or_default();
+
+        let mut message = Map::new();
+
+        message.insert("text".into(), json!(text));
+        message.insert("cid".into(), json!(Utc::now().timestamp_millis()));
+        message.insert(
+            "elements".into(),
+                       args_map.get("elements").cloned().unwrap_or(json!([])),
+        );
+        message.insert(
+            "attaches".into(),
+                       args_map.get("attaches").cloned().unwrap_or(json!([])),
+        );
+
+        if let Some(link) = args_map.get("replyTo").and_then(|id| {
+            id.as_str()
+            .and_then(|s| s.parse::<u64>().ok())
+            .map(|num| {
+                json!({
+                    "type": "REPLY",
+                    "messageId": num
+                })
+            })
+        }) {
+            message.insert("link".into(), link);
+        }
+
         let payload = json!({
             "chatId": chat_id,
-            "message": {
-                "text": text,
-                "cid": Utc::now().timestamp_millis(),
-                "elements": args_map.get("elements").cloned().unwrap_or(json!([])),
-                "attaches": args_map.get("attaches").cloned().unwrap_or(json!([])),
-                "link": args_map.get("replyTo").cloned().map(|id| json!({"type": "REPLY", "messageId": id.to_string()})),
-            },
+            "message": message,
             "notify": args_map.get("notify").cloned().unwrap_or(json!(true)),
         });
+
         self.send_and_wait(64, payload, 0).await
     }
     
