@@ -19,11 +19,11 @@ impl MaxClient {
         message.insert("cid".into(), json!(Utc::now().timestamp_millis()));
         message.insert(
             "elements".into(),
-                       args_map.get("elements").cloned().unwrap_or(json!([])),
+            args_map.get("elements").cloned().unwrap_or(json!([])),
         );
         message.insert(
             "attaches".into(),
-                       args_map.get("attaches").cloned().unwrap_or(json!([])),
+            args_map.get("attaches").cloned().unwrap_or(json!([])),
         );
 
         if let Some(link) = args_map.get("replyTo").and_then(|id| {
@@ -46,23 +46,6 @@ impl MaxClient {
         });
 
         self.send_and_wait(64, payload, 0).await
-    }
-    
-    pub async fn fetch_history(
-        &self,
-        chat_id: i64,
-        from_time: Option<u64>,
-        forward: u32,
-        backward: u32,
-    ) -> ClientResult<Response> {
-        let payload = json!({
-            "chatId": chat_id,
-            "from": from_time.unwrap_or(Utc::now().timestamp_millis() as u64),
-            "forward": forward,
-            "backward": backward,
-            "getMessages": true
-        });
-        self.send_and_wait(49, payload, 0).await
     }
     
     
@@ -95,6 +78,91 @@ impl MaxClient {
         self.send_and_wait(179, payload, 0).await
     }
 
+    pub async fn read_message(
+        &self,
+        chat_id: i64,
+        message_id: u64,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "type": "READ_MESSAGE",
+            "chatId": chat_id,
+            "messageId": message_id,
+            "mark": Utc::now().timestamp_millis() as u64,
+        });
+        self.send_and_wait(50, payload, 0).await
+    }
+
+    pub async fn pin_message(
+        &self,
+        chat_id: i64,
+        message_id: u64,
+        notify_pin: bool,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+            "notifyPin": notify_pin,
+            "pinMessageId": message_id,
+        });
+        self.send_and_wait(55, payload, 0).await
+    }
+
+    pub async fn delete_message(
+        &self,
+        chat_id: i64,
+        message_id: u64,
+        for_me: bool,
+    ) -> ClientResult<Response> {
+        self.delete_messages(chat_id, vec![message_id], for_me).await
+    }
+
+    pub async fn delete_messages(
+        &self,
+        chat_id: i64,
+        message_ids: Vec<u64>,
+        for_me: bool,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+            "messageIds": message_ids,
+            "forMe": for_me,
+        });
+
+        self.send_and_wait(66, payload, 0).await
+    }
+
+    pub async fn edit_message(
+        &self,
+        chat_id: i64,
+        message_id: u64,
+        text: String
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+            "messageId": message_id,
+            "text": text,
+            "elements": [],
+            "attaches": [],
+        });
+        self.send_and_wait(67, payload, 0).await
+    }
+
+    pub async fn fetch_history(
+        &self,
+        chat_id: i64,
+        from_time: Option<u64>,
+        forward: u32,
+            backward: u32,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+            "from": from_time.unwrap_or(Utc::now().timestamp_millis() as u64),
+            "forward": forward,
+            "backward": backward,
+            "getMessages": true
+        });
+        self.send_and_wait(49, payload, 0).await
+    }
+
     pub async fn get_video_by_id(
         &self,
         chat_id: i64,
@@ -121,64 +189,6 @@ impl MaxClient {
             "fileId": file_id
         });
         self.send_and_wait(88, payload, 0).await
-    }
-
-    pub async fn read_message(
-        &self,
-        chat_id: i64,
-        message_id: u64,
-    ) -> ClientResult<Response> {
-        let payload = json!({
-            "type": "READ_MESSAGE",
-            "chatId": chat_id,
-            "messageId": message_id,
-            "mark": Utc::now().timestamp_millis() as u64,
-        });
-        self.send_and_wait(50, payload, 0).await
-    }
-
-    pub async fn pin_message(
-        &self,
-        chat_id: i64,
-        message_id: u64,
-        notify_pin: bool,
-    ) -> ClientResult<Response> {
-        let payload = json!({
-            "chatId": chat_id,
-            "notifyPin": notify_pin,
-            "pinMessageId": message_id
-        });
-        self.send_and_wait(55, payload, 0).await
-    }
-
-    pub async fn delete_message(
-        &self,
-        chat_id: i64,
-        message_id: u64,
-        for_me: bool,
-    ) -> ClientResult<Response> {
-        let payload = json!({
-            "chatId": chat_id,
-            "messageId": message_id,
-            "forMe": for_me,
-        });
-        self.send_and_wait(66, payload, 0).await
-    }
-
-    pub async fn edit_message(
-        &self,
-        chat_id: i64,
-        message_id: u64,
-        text: String
-    ) -> ClientResult<Response> {
-        let payload = json!({
-            "chatId": chat_id,
-            "messageId": message_id,
-            "text": text,
-            "elements": [],
-            "attaches": [],
-        });
-        self.send_and_wait(67, payload, 0).await
     }
     
     /* TODO Upload image, video, file */
