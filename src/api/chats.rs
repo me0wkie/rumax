@@ -1,9 +1,9 @@
 use crate::{errors::ClientResult, MaxClient};
+use serde_json::{json, Map, Value};
 use crate::models::Response;
-use serde_json::json;
 
 impl MaxClient {
-    pub async fn public_search(
+    pub async fn search_public(
         &self,
         query: String,
         count: i32,
@@ -15,6 +15,24 @@ impl MaxClient {
             "type": search_type,
         });
         self.send_and_wait(60, payload, 0).await
+    }
+
+    pub async fn search_msg(
+        &self,
+        query: String,
+        count: i32,
+        marker: Option<String>,
+    ) -> ClientResult<Response> {
+        let mut payload = Map::new();
+
+        payload.insert("query".into(), json!(query));
+        payload.insert("count".into(), json!(count));
+
+        if let Some(m) = marker {
+            payload.insert("marker".into(), json!(m));
+        }
+
+        self.send_and_wait(68, Value::Object(payload), 0).await
     }
 
     pub async fn get_chats(
