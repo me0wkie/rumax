@@ -5,3 +5,4 @@ pub mod contacts;
 pub mod chats;
 pub mod files;
 pub mod calls;
+pub mod user;

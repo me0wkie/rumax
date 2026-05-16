@@ -102,26 +102,4 @@ impl MaxClient {
         
         self.send_and_wait(19, payload, 0).await
     }
-
-    /*
-     * Удаление сессии
-     */
-    pub async fn logout(&self) -> ClientResult<Response> {
-        self.disconnect().await;
-        self.send_and_wait(20, json!({}), 0).await
-    }
-
-    /*
-     * Список сессий
-     */
-    pub async fn get_sessions(&self) -> ClientResult<Response> {
-        self.send_and_wait(96, json!({}), 0).await
-    }
-
-    /*
-     * Закрыть все сессии, кроме текущей
-     */
-    pub async fn close_all_sessions(&self) -> ClientResult<Response> {
-        self.send_and_wait(97, json!({}), 0).await
-    }
 }
