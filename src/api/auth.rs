@@ -55,7 +55,38 @@ impl MaxClient {
         
         Ok(resp)
     }
-    
+
+    /**
+     * Проверка облачного пароля (2FA)
+     */
+    pub async fn check_password(&self, password: String, track_id: String) -> ClientResult<Response> {
+        let payload = json!({
+            "password": password,
+            "trackId": track_id,
+        });
+
+        let resp = self.send_and_wait(115, payload, 0).await?;
+
+        log::debug!("check_password response {:?}", resp);
+
+        if let Some(token_attrs) = resp.payload.get("tokenAttrs").and_then(|t| t.as_object()) {
+            for (token_type, value) in token_attrs {
+                if let Some(token) = value.get("token").and_then(|t| t.as_str()) {
+                    match token_type.as_str() {
+                        "LOGIN" => {
+                            self.set_token(token.to_string()).await;
+                        }
+                        _ => {
+                            eprintln!("Unknown token type in check_password: {}", token_type);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(resp)
+    }
+
     /**
      * Регистрация
      */
