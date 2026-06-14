@@ -1,5 +1,5 @@
 use crate::{errors::ClientResult, MaxClient};
-use crate::models::Response;
+use crate::models::{Response};
 use serde_json::json;
 
 impl MaxClient {

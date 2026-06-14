@@ -31,7 +31,7 @@ use transport::{
 
 use constants::Constants;
 use errors::{ClientResult, Error};
-use models::{Request, Response};
+use models::{Request, Response, Identity};
 
 struct ClientState {
     writer: Option<Box<dyn TransportWriter>>,
@@ -43,8 +43,7 @@ struct ClientState {
     user_id: Option<u64>,
     action_id: u64,
     session_id: i64,
-    device_id: Option<String>,
-    mt_instance: Option<String>,
+    identity: Option<Identity>,
     current_screen: String,
     is_closed: bool,
     mobile_port: u16,
@@ -77,8 +76,7 @@ impl MaxClient {
                 user_id: None,
                 action_id: 0,
                 session_id: Utc::now().timestamp_millis(),
-                device_id: None,
-                mt_instance: None, // TODO IDK что это и зачем
+                identity: None,
                 current_screen: "chats_list_tab".to_string(),
                 is_closed: true,
                 mobile_host: Constants::MOBILE_HOST.to_string(),
@@ -110,11 +108,13 @@ impl MaxClient {
         state.mobile_port = port;
     }
     
-    pub async fn connect(&self, device_id: String, mt_instance: String, is_mobile: bool) -> ClientResult<Response> {
+    pub async fn connect(&self, identity: Identity, is_mobile: bool) -> ClientResult<Response> {
         let _ = ring::default_provider().install_default();
 
         let state_clone = Arc::clone(&self.state);
         let mut state_lock = state_clone.lock().await;
+
+        state_lock.identity = Some(identity.clone());
 
         let (writer, reader): (Box<dyn TransportWriter>, Box<dyn TransportReader>) = if is_mobile {
             info!("Подключение Mobile TCP/TLS...");
@@ -147,9 +147,7 @@ impl MaxClient {
         let (shutdown_tx, shutdown_rx_read) = broadcast::channel(1);
         let shutdown_rx_ping = shutdown_tx.subscribe();
         let event_tx = self.event_tx.clone();
-        
-        state_lock.device_id = Some(device_id.clone());
-        state_lock.mt_instance = Some(mt_instance.clone());
+
         state_lock.session_id = Utc::now().timestamp_millis();
 
         tokio::spawn(Self::read_task(reader, pending_clone, event_tx, shutdown_rx_read, Arc::clone(&self.state)));
@@ -164,38 +162,19 @@ impl MaxClient {
         
         drop(state_lock);
         
-        debug!("Отправка Handshake с deviceId: {}", device_id);
+        debug!("Отправка Handshake");
         
         let handshake_payload = if is_mobile {
-            let user_agent = json!({
-                "deviceType": "ANDROID",
-                "appVersion": "25.10.0",
-                "osVersion": "Android 13",
-                "timezone": "GMT",
-                "screen": "130dpi 130dpi 600x874",
-                "pushDeviceType": "GCM",
-                "locale": "ru",
-                "buildNumber": 6401,
-                "deviceName": "unknown Generic Android-x86_64",
-                "deviceLocale": "ru",
-            });
             json!({
                 "clientSessionId": 1,
-                "mt_instanceid": mt_instance, //Uuid::new_v4().to_string()
-                "userAgent": user_agent,
-                "deviceId": device_id,
+                "mt_instanceid": identity.mt_instance,
+                "userAgent": identity.user_agent,
+                "deviceId": identity.device_id,
             })
         } else {
-            let user_agent = json!({
-                "deviceType": "WEB", "locale": "ru", "deviceLocale": "ru", "osVersion": "Linux",
-                "deviceName": "Chrome", 
-                "headerUserAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
-                "appVersion": "25.10.13",
-                "screen": "1080x1920 1.0x", "timezone": "Europe/Moscow",
-            });
             json!({
-                "deviceId": device_id,
-                "userAgent": user_agent,
+                "deviceId": identity.device_id,
+                "userAgent": identity.user_agent,
             })
         };
 
@@ -225,7 +204,7 @@ impl MaxClient {
         let this = self.clone();
         
         Box::pin(async move {
-            let (should_reconnect, device_id, mt_instance) = {
+            /*let (should_reconnect, identity) = {
                 let state = this.state.lock().await;
 
                 if state.is_closed {
@@ -233,20 +212,20 @@ impl MaxClient {
                 }
 
                 if state.writer.is_none() {
-                    (true, state.device_id.clone(), state.mt_instance.clone())
+                    (true, state.identity.clone())
                 } else {
-                    (false, None, None)
+                    (false, None)
                 }
             };
 
             if should_reconnect {
-                if let (Some(id), Some(mt)) = (device_id, mt_instance) {
+                if let Some(i) = identity {
                     debug!("Реконнект внутри send_frame...");
-                    this.connect(id, mt, true).await?; 
+                    this.connect(i, true).await?;
                 } else {
                     return Err(Error::ConnectionFailed("Device ID not set".to_string()));
                 }
-            }
+            }*/
 
             let mut state = this.state.lock().await;
             if let Some(writer) = &mut state.writer {
