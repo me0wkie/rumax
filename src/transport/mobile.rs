@@ -206,8 +206,8 @@ impl TransportWriter for MobileWriter {
 
         let mut buffer = BytesMut::with_capacity(10 + payload_len);
         buffer.put_u8(request.ver as u8);
-        buffer.put_u16(request.cmd as u16);
-        buffer.put_u8(request.seq as u8);
+        buffer.put_u8(request.cmd as u8);
+        buffer.put_u16(request.seq as u16);
         buffer.put_u16(request.opcode);
         
         let packed_len = (payload_len as u32) & 0xFFFFFF; 

@@ -252,7 +252,7 @@ impl MaxClient {
             state.pending.lock().unwrap().insert(current_seq, tx);
             
             Request {
-                ver: 11,
+                ver: 10,
                 cmd,
                 seq: current_seq,
                 opcode,
