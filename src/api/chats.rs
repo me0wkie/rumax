@@ -1,6 +1,7 @@
 use crate::{errors::ClientResult, MaxClient};
 use serde_json::{json, Map, Value};
 use crate::models::Response;
+use chrono::Utc;
 
 impl MaxClient {
     pub async fn search_public(
@@ -14,6 +15,7 @@ impl MaxClient {
             "count": count,
             "type": search_type,
         });
+
         self.send_and_wait(60, payload, 0).await
     }
 
@@ -42,6 +44,45 @@ impl MaxClient {
         let payload = json!({
             "chatIds": chat_ids,
         });
+
         self.send_and_wait(48, payload, 0).await
+    }
+
+    pub async fn create_group(
+        &self,
+        title: String,
+        participant_ids: Option<Vec<i64>>,
+        notify: Option<bool>
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "message": {
+                "cid": Utc::now().timestamp_millis(),
+                "attaches": [{
+                    "_type": "CONTROL",
+                    "event": "new",
+                    "chatType": "CHAT",
+                    "title": title,
+                    "userIds": participant_ids.unwrap_or_default()
+                }]
+            },
+            "notify": notify.unwrap_or(true)
+        });
+
+        self.send_and_wait(64, payload, 0).await
+    }
+
+    pub async fn delete_chat(
+        &self,
+        chat_id: i64,
+        last_event_time: Option<i64>,
+        for_all: Option<bool>,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chat_id": chat_id,
+            "last_event_time": last_event_time.unwrap_or(Utc::now().timestamp_millis()),
+            "for_all": for_all.unwrap_or(false)
+        });
+
+        self.send_and_wait(52, payload, 0).await
     }
 }
