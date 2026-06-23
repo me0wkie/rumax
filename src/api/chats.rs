@@ -78,9 +78,9 @@ impl MaxClient {
         for_all: Option<bool>,
     ) -> ClientResult<Response> {
         let payload = json!({
-            "chat_id": chat_id,
-            "last_event_time": last_event_time.unwrap_or(Utc::now().timestamp_millis()),
-            "for_all": for_all.unwrap_or(false)
+            "chatId": chat_id,
+            "lastEventTime": last_event_time.unwrap_or(Utc::now().timestamp_millis()),
+            "forAll": for_all.unwrap_or(false)
         });
 
         self.send_and_wait(52, payload, 0).await

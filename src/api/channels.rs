@@ -18,8 +18,9 @@ impl MaxClient {
         chat_id: i64
     ) -> ClientResult<Response> {
         let payload = json!({
-            "chat_id": chat_id,
+            "chatId": chat_id
         });
+
         self.send_and_wait(58, payload, 0).await
     }
 
@@ -47,7 +48,7 @@ impl MaxClient {
             payload.insert("marker".into(), json!(m));
         }
 
-        payload.insert("chat_id".into(), json!(chat_id));
+        payload.insert("chatId".into(), json!(chat_id));
         payload.insert("count".into(), json!(count));
 
         self.send_and_wait(59, Value::Object(payload), 0).await
@@ -61,7 +62,7 @@ impl MaxClient {
         let payload = json!({
             "type": "MEMBER",
             "query": query,
-            "chat_id": chat_id,
+            "chatId": chat_id,
         });
         self.send_and_wait(59, payload, 0).await
     }
