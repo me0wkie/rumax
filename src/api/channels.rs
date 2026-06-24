@@ -7,10 +7,7 @@ impl MaxClient {
         &self,
         link: String
     ) -> ClientResult<Response> {
-        let payload = json!({
-            "link": link,
-        });
-        self.send_and_wait(57, payload, 0).await
+        self.join_group(link).await
     }
 
     pub async fn leave_channel(

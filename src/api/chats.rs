@@ -96,4 +96,153 @@ impl MaxClient {
 
         self.send_and_wait(58, payload, 0).await
     }
+
+    pub async fn change_group_profile(
+        &self,
+        chat_id: i64,
+        title: Option<String>,
+        description: Option<String>,
+    ) -> ClientResult<Response> {
+        let mut payload = Map::new();
+
+        payload.insert("chatId".into(), json!(chat_id));
+
+        if let Some(t) = title {
+            payload.insert("theme".into(), json!(t));
+        }
+
+        if let Some(d) = description {
+            payload.insert("description".into(), json!(d));
+        }
+
+        self.send_and_wait(55, Value::Object(payload), 0).await
+    }
+
+    pub async fn join_group(
+        &self,
+        link: String,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "link": link,
+        });
+
+        self.send_and_wait(57, payload, 0).await
+    }
+
+    pub async fn resolve_group_by_link(
+        &self,
+        link: String,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "link": link,
+        });
+
+        self.send_and_wait(89, payload, 0).await
+    }
+
+    pub async fn rework_invite_link(
+        &self,
+        chat_id: i64,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+        });
+
+        self.send_and_wait(55, payload, 0).await
+    }
+
+    pub async fn confirm_join_requests(
+        &self,
+        chat_id: i64,
+        user_ids: Vec<i64>,
+        show_history: Option<bool>,
+    ) -> ClientResult<Response> {
+        self.invite_users_to_group(chat_id, user_ids, show_history).await
+    }
+
+    pub async fn decline_join_requests(
+        &self,
+        chat_id: i64,
+        user_ids: Vec<i64>,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+            "userIds": user_ids,
+            "operation": "remove",
+        });
+
+        self.send_and_wait(77, payload, 0).await
+    }
+
+    /* TODO: make ChangeGroupSettingsOptions struct! */
+    pub async fn change_group_settings(
+        &self,
+        chat_id: i64,
+        all_can_pin_message: Option<bool>,
+        only_owner_can_change_icon_title: Option<bool>,
+        only_admin_can_add_member: Option<bool>,
+        only_admin_can_call: Option<bool>,
+        members_can_see_private_link: Option<bool>,
+    ) -> ClientResult<Response> {
+        let mut settings = Map::new();
+
+        if let Some(b) = all_can_pin_message {
+            settings.insert("allCanPinMessage".into(), json!(b));
+        }
+
+        if let Some(b) = only_owner_can_change_icon_title {
+            settings.insert("onlyOwnerCanChangeIconTitle".into(), json!(b));
+        }
+
+        if let Some(b) = only_admin_can_add_member {
+            settings.insert("onlyAdminCanAddMember".into(), json!(b));
+        }
+
+        if let Some(b) = only_admin_can_call {
+            settings.insert("onlyAdminCanCall".into(), json!(b));
+        }
+
+        if let Some(b) = members_can_see_private_link {
+            settings.insert("membersCanSeePrivateLink".into(), json!(b));
+        }
+
+        let payload = json!({
+            "chatId": chat_id,
+            "options": Value::Object(settings),
+        });
+
+        self.send_and_wait(55, payload, 0).await
+    }
+
+    pub async fn remove_users_from_group(
+        &self,
+        chat_id: i64,
+        user_ids: Vec<i64>,
+        clean_msg_period: i64
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+            "userIds": user_ids,
+            "operation": "remove",
+            "cleanMsgPeriod": clean_msg_period
+        });
+
+        self.send_and_wait(77, payload, 0).await
+    }
+
+    pub async fn invite_users_to_group(
+        &self,
+        chat_id: i64,
+        user_ids: Vec<i64>,
+        show_history: Option<bool>
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+            "userIds": user_ids,
+            "showHistory": show_history.unwrap_or(true),
+            "operation": "add",
+        });
+
+        self.send_and_wait(77, payload, 0).await
+    }
 }
