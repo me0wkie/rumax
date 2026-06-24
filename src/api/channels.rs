@@ -13,15 +13,11 @@ impl MaxClient {
         self.send_and_wait(57, payload, 0).await
     }
 
-    pub async fn quit_channel(
+    pub async fn leave_channel(
         &self,
         chat_id: i64
     ) -> ClientResult<Response> {
-        let payload = json!({
-            "chatId": chat_id
-        });
-
-        self.send_and_wait(58, payload, 0).await
+        self.leave_group(chat_id).await
     }
 
     pub async fn resolve_channel_by_name(
