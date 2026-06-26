@@ -53,3 +53,4 @@ pub struct UserAgent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub header_user_agent: Option<String>,
 }
+

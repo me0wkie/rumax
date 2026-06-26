@@ -1,5 +1,5 @@
 use crate::{errors::ClientResult, MaxClient};
-use crate::models::Response;
+use crate::models::{Response, FetchHistoryOptions};
 use serde_json::{json, Map};
 use std::collections::HashMap;
 use chrono::Utc;
@@ -149,17 +149,23 @@ impl MaxClient {
     pub async fn fetch_history(
         &self,
         chat_id: i64,
-        from_time: Option<u64>,
-        forward: u32,
-            backward: u32,
+        opts: Option<FetchHistoryOptions>,
     ) -> ClientResult<Response> {
-        let payload = json!({
+        let opts = opts.unwrap_or_default();
+
+        let payload = serde_json::json!({
             "chatId": chat_id,
-            "from": from_time.unwrap_or(Utc::now().timestamp_millis() as u64),
-            "forward": forward,
-            "backward": backward,
-            "getMessages": true
+            "forward": opts.forward,
+            "backward": opts.backward,
+            "backwardTime": opts.backward_time,
+            "forwardTime": opts.forward_time,
+            "getChat": opts.get_chat,
+            "from": opts.from_time.unwrap_or_else(|| Utc::now().timestamp_millis() as u64),
+            "itemType": opts.item_type,
+            "getMessages": opts.get_messages,
+            "interactive": opts.interactive,
         });
+
         self.send_and_wait(49, payload, 0).await
     }
 
