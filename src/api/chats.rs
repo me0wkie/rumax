@@ -140,11 +140,12 @@ impl MaxClient {
         self.send_and_wait(89, payload, 0).await
     }
 
-    pub async fn rework_invite_link(
+    pub async fn refresh_invite_link(
         &self,
         chat_id: i64,
     ) -> ClientResult<Response> {
         let payload = json!({
+            "revokePrivateLink": true,
             "chatId": chat_id,
         });
 
@@ -157,7 +158,15 @@ impl MaxClient {
         user_ids: Vec<i64>,
         show_history: Option<bool>,
     ) -> ClientResult<Response> {
-        self.invite_users_to_group(chat_id, user_ids, show_history).await
+        let payload = json!({
+            "chatId": chat_id,
+            "userIds": user_ids,
+            "type": "JOIN_REQUEST",
+            "showHistory": show_history.unwrap_or(true),
+            "operation": "add",
+        });
+
+        self.send_and_wait(77, payload, 0).await
     }
 
     pub async fn decline_join_requests(
@@ -244,5 +253,18 @@ impl MaxClient {
         });
 
         self.send_and_wait(77, payload, 0).await
+    }
+
+    pub async fn get_join_requests(
+        &self,
+        chat_id: i64,
+    ) -> ClientResult<Response> {
+        let payload = json!({
+            "chatId": chat_id,
+            "type": "JOIN_REQUEST",
+            "count": 100
+        });
+
+        self.send_and_wait(59, payload, 0).await
     }
 }
